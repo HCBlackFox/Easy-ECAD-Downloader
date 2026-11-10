@@ -19,7 +19,9 @@ export function createServiceWorkerChrome({
     runtimeMessage: [],
     downloadsChanged: []
   };
-  const storage = { ...storageState };
+  // Existing worker suites assert KiCad output; Altium suites opt in explicitly
+  // or remove the key to exercise the production Altium default.
+  const storage = { outputFormat: "kicad", ...storageState };
   const sessionStorage = { ...sessionStorageState };
   const cookieJar = { ...cookieState };
   let nextDownloadId = 1;
@@ -139,6 +141,7 @@ export function loadServiceWorker({
   fetchImpl,
   userAgent = "Mozilla/5.0 Chrome/135.0.0.0",
   convertEasyedaCadToKicad = vi.fn(() => ({})),
+  convertEasyedaCadToAltium,
   convertObjToWrlString = vi.fn(() => "#VRML"),
   readZipEntries = vi.fn(async () => []),
   urlApi = createMockUrlApi()
@@ -147,6 +150,7 @@ export function loadServiceWorker({
     fetchImpl,
     userAgent,
     convertEasyedaCadToKicad,
+    convertEasyedaCadToAltium,
     convertObjToWrlString,
     readZipEntries,
     urlApi,

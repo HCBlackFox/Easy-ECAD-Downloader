@@ -516,6 +516,30 @@ async function extractSamacsysKiCadAssets(zipBuffer, readZipEntriesImpl = readZi
   };
 }
 
+// The same bundle carries an Altium/ folder with complete per-part .SchLib and
+// .PcbLib binaries. They are exported unchanged beside the shared 3D/ STEP files.
+async function extractSamacsysAltiumAssets(zipBuffer, readZipEntriesImpl = readZipEntries) {
+  const entries = await readZipEntriesImpl(zipBuffer);
+  const select = (directoryName, extensions) => entries
+    .filter((entry) =>
+      isZipPathInsideDirectory(entry.name, directoryName) &&
+      hasZipFileExtension(entry.name, extensions))
+    .map((entry) => ({
+      path: entry.name,
+      filename: basenameFromZipPath(entry.name),
+      data: entry.data
+    }));
+  const assets = {
+    symbols: select("Altium", [".schlib"]),
+    footprints: select("Altium", [".pcblib"]),
+    stepModels: select("3D", [".stp", ".step"])
+  };
+  if (!assets.symbols.length && !assets.footprints.length && !assets.stepModels.length) {
+    throw new Error("SamacSys ZIP did not contain Altium assets.");
+  }
+  return assets;
+}
+
 function rewriteSamacsysSymbolFootprintReference(symbolLibraryText, footprintName, libraryName) {
   if (!footprintName || !libraryName) {
     return symbolLibraryText;
@@ -594,6 +618,7 @@ export {
   basenameFromZipPath,
   buildSamacsysPreviewResponse,
   createSamacsysFetchImpl,
+  extractSamacsysAltiumAssets,
   extractSamacsysKiCadAssets,
   fetchSamacsysPageMetadata,
   fetchSamacsysZipArchive,

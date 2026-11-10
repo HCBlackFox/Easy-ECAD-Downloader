@@ -17,6 +17,7 @@ import {
   createExportContext,
   getLibraryName,
   resolveExportOptions,
+  writeBinaryArtifact,
   writeCompletedModelArtifact,
   writeSymbolArtifact,
   writeTextArtifact,
@@ -25,9 +26,75 @@ import {
 import { rewriteFirstKicadFootprintModelPath } from "../core/kicad_footprint_models.js";
 import { sanitizeFilenamePart } from "../core/preview_data.js";
 import { completedModelFilename } from "../core/download_receipts.js";
+import { OUTPUT_FORMAT_ALTIUM } from "../core/settings.js";
 
 function buildSafeFilename(name, extension, fallback) {
   return `${sanitizeFilenamePart(name, fallback)}.${extension}`;
+}
+
+async function writeEasyedaDatasheet({ downloads, exportContext, datasheetInfo, warnings }) {
+  if (!datasheetInfo.url) {
+    warnings.push("Datasheet not available for this part.");
+    return 0;
+  }
+  try {
+    return await writeUrlArtifact({
+      downloads,
+      exportContext,
+      url: datasheetInfo.url,
+      individualFilename: datasheetInfo.filename,
+      libraryPath: `${exportContext.libraryPaths.datasheetDir}/${datasheetInfo.filename}`
+    });
+  } catch (error) {
+    console.warn("Datasheet download failed:", error);
+    warnings.push("Datasheet download failed.");
+    return 0;
+  }
+}
+
+// Altium footprints carry no external model path, so the STEP file is an
+// independent optional download and its failure only adds a warning. WRL
+// conversion is KiCad-specific and is skipped for Altium output.
+async function writeEasyedaAltiumArtifacts({
+  fetchImpl, downloads, convertEasyedaCadToAltium, exportContext, options, cadData, lcscId, warnings
+}) {
+  const { symbolDir, footprintDir, modelDir } = exportContext.libraryPaths;
+  const altiumFiles = convertEasyedaCadToAltium(cadData, {
+    symbol: options.symbol,
+    footprint: options.footprint
+  });
+  let downloadCount = 0;
+  const writeFile = (data, filename, directory) => writeBinaryArtifact({
+    downloads, exportContext, data, individualFilename: filename, libraryPath: `${directory}/${filename}`
+  });
+
+  if (altiumFiles.symbol) {
+    const filename = buildSafeFilename(`${lcscId}-${altiumFiles.symbol.name}`, "SchLib", lcscId);
+    downloadCount += await writeFile(altiumFiles.symbol.data, filename, symbolDir);
+  }
+  if (altiumFiles.footprint) {
+    const filename = buildSafeFilename(altiumFiles.footprint.name, "PcbLib", "footprint");
+    downloadCount += await writeFile(altiumFiles.footprint.data, filename, footprintDir);
+  }
+  if (options.model3d) {
+    const modelInfo = find3dModelInfo(cadData.packageDetail);
+    if (!modelInfo) {
+      warnings.push("3D model not available for this part.");
+      return downloadCount;
+    }
+    const filename = buildSafeFilename(modelInfo.name, "step", modelInfo.uuid || "model");
+    try {
+      const response = await fetchImpl(EASYEDA_MODEL_STEP_ENDPOINT.replace("{uuid}", modelInfo.uuid));
+      if (!response.ok) {
+        warnings.push(`3D STEP model download failed (HTTP ${response.status}).`);
+      } else {
+        downloadCount += await writeFile(await response.arrayBuffer(), filename, modelDir);
+      }
+    } catch (error) {
+      warnings.push(`3D STEP model download failed: ${error?.message || String(error)}`);
+    }
+  }
+  return downloadCount;
 }
 
 function resolveEasyedaFootprintModelPath(exportContext, modelFilename) {
@@ -51,6 +118,7 @@ function createEasyedaAdapter(deps) {
     fetchImpl,
     downloads,
     convertEasyedaCadToKicad,
+    convertEasyedaCadToAltium,
     convertObjToWrlString
   } = deps;
 
@@ -69,6 +137,22 @@ function createEasyedaAdapter(deps) {
 
       const cadData = await fetchCadData(fetchImpl, lcscId);
       const datasheetInfo = getDatasheetInfo(cadData, lcscId);
+      if (exportContext.settings.outputFormat === OUTPUT_FORMAT_ALTIUM) {
+        downloadCount += await writeEasyedaAltiumArtifacts({
+          fetchImpl,
+          downloads,
+          convertEasyedaCadToAltium,
+          exportContext,
+          options: resolvedOptions,
+          cadData,
+          lcscId,
+          warnings
+        });
+        if (resolvedOptions.datasheet) {
+          downloadCount += await writeEasyedaDatasheet({ downloads, exportContext, datasheetInfo, warnings });
+        }
+        return { warnings, downloadCount };
+      }
       const kicadFiles = convertEasyedaCadToKicad(cadData, {
         symbol: resolvedOptions.symbol,
         footprint: resolvedOptions.footprint
@@ -162,22 +246,7 @@ function createEasyedaAdapter(deps) {
       }
 
       if (resolvedOptions.datasheet) {
-        if (!datasheetInfo.url) {
-          warnings.push("Datasheet not available for this part.");
-        } else {
-          try {
-            downloadCount += await writeUrlArtifact({
-              downloads,
-              exportContext,
-              url: datasheetInfo.url,
-              individualFilename: datasheetInfo.filename,
-              libraryPath: `${exportContext.libraryPaths.datasheetDir}/${datasheetInfo.filename}`
-            });
-          } catch (error) {
-            console.warn("Datasheet download failed:", error);
-            warnings.push("Datasheet download failed.");
-          }
-        }
+        downloadCount += await writeEasyedaDatasheet({ downloads, exportContext, datasheetInfo, warnings });
       }
 
       return { warnings, downloadCount };

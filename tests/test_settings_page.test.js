@@ -15,6 +15,7 @@ import {
 } from "./helpers/test_harness.js";
 
 const DEFAULT_STORED_SETTINGS = {
+  outputFormat: "altium",
   downloadIndividually: false,
   libraryDownloadRoot: "easyECADDownloader",
   samacsysFirefoxProxyBaseUrl: "",
@@ -391,6 +392,26 @@ describe("settings page", () => {
       libraryDownloadRoot: "KiCad/easyECAD/Parts"
     });
     expect(hooks.elements.statusEl.textContent).toBe("Settings saved.");
+  });
+
+  it("defaults to Altium output and saves or discards the KiCad format choice", async () => {
+    const { dom, state, hooks } = await loadSettingsPage();
+
+    await applyStoredSettings(state, { ...DEFAULT_STORED_SETTINGS, outputFormat: "unknown" });
+    expect(hooks.elements.outputFormatEl.value).toBe("altium");
+
+    hooks.elements.outputFormatEl.value = "kicad";
+    dispatchChange(dom, hooks.elements.outputFormatEl);
+    await flushAsyncWork();
+    expect(hooks.elements.saveSettingsEl.disabled).toBe(false);
+    hooks.discardSettings();
+    expect(hooks.elements.outputFormatEl.value).toBe("altium");
+
+    hooks.elements.outputFormatEl.value = "kicad";
+    dispatchChange(dom, hooks.elements.outputFormatEl);
+    await flushAsyncWork();
+    await saveChanges(hooks);
+    expect(state.storageSetCalls[0]).toEqual({ ...DEFAULT_STORED_SETTINGS, outputFormat: "kicad" });
   });
 
   it("saves Firefox helper token and SamacSys credentials for this session by default", async () => {

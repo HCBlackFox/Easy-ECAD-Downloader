@@ -6,9 +6,11 @@
  */
 
 import {
+  buildAltiumLibraryPaths,
   buildLibraryPaths,
   DEFAULT_LIBRARY_DOWNLOAD_ROOT,
-  loadSettings
+  loadSettings,
+  OUTPUT_FORMAT_ALTIUM
 } from "./settings.js";
 import {
   extractSymbolBlock,
@@ -58,8 +60,17 @@ function resolveExportOptions(options = {}) {
   return resolvedOptions;
 }
 
+// Altium paths have no merged symbol file, so only KiCad exports carry the
+// storage key used by the serialized symbol-library merge.
 async function createExportContext(chromeApi) {
   const settings = await loadSettings(chromeApi);
+  if (settings.outputFormat === OUTPUT_FORMAT_ALTIUM) {
+    return {
+      settings,
+      libraryPaths: buildAltiumLibraryPaths(settings.libraryDownloadRoot),
+      symbolLibraryKey: ""
+    };
+  }
   const libraryPaths = buildLibraryPaths(settings.libraryDownloadRoot);
 
   return {

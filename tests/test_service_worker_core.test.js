@@ -88,6 +88,7 @@ describe("service worker core helpers", () => {
     });
 
     await expect(loadSettings(chrome)).resolves.toEqual({
+      outputFormat: "kicad",
       downloadIndividually: false,
       libraryDownloadRoot: "easyECADDownloader",
       samacsysFirefoxProxyBaseUrl: "https://proxy.example.test/relay",

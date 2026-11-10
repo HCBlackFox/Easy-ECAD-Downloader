@@ -9,6 +9,7 @@ import {
   DEFAULT_LIBRARY_DOWNLOAD_ROOT,
   DEFAULT_SETTINGS,
   loadSettings as loadStoredSettings,
+  normalizeOutputFormat,
   parseLibraryDownloadRoot,
   parseSamacsysCredentialValue,
   parseSamacsysProxyAuthorizationHeader,
@@ -24,6 +25,7 @@ const settingsForm = settingsDocument.getElementById("settingsForm");
 const statusEl = settingsDocument.getElementById("status");
 const saveSettingsEl = settingsDocument.getElementById("saveSettings");
 const discardSettingsEl = settingsDocument.getElementById("discardSettings");
+const outputFormatEl = settingsDocument.getElementById("outputFormat");
 const downloadIndividuallyEl = settingsDocument.getElementById(
   "downloadIndividually"
 );
@@ -237,6 +239,7 @@ function applySettingsToUi(settings) {
     settings.samacsysFirefoxPassword
   );
 
+  outputFormatEl.value = normalizeOutputFormat(settings.outputFormat);
   downloadIndividuallyEl.checked =
     typeof settings.downloadIndividually === "boolean"
       ? settings.downloadIndividually
@@ -253,6 +256,7 @@ function applySettingsToUi(settings) {
     settings.rememberSamacsysCredentials
   );
   currentSettings = {
+    outputFormat: outputFormatEl.value,
     downloadIndividually: downloadIndividuallyEl.checked,
     libraryDownloadRoot: normalizedRoot.value,
     samacsysFirefoxProxyBaseUrl: normalizedProxy.value,
@@ -296,6 +300,7 @@ function readSettingsFromUi() {
   samacsysFirefoxUsernameEl.value = normalizedUsername;
 
   return {
+    outputFormat: normalizeOutputFormat(outputFormatEl.value),
     downloadIndividually: Boolean(downloadIndividuallyEl.checked),
     libraryDownloadRoot: normalizedRoot.value,
     libraryDownloadRootIsValid: normalizedRoot.isValid,
@@ -313,6 +318,7 @@ function readSettingsFromUi() {
 
 function buildLocalSettings(settings) {
   return {
+    outputFormat: settings.outputFormat,
     downloadIndividually: settings.downloadIndividually,
     libraryDownloadRoot: settings.libraryDownloadRoot,
     samacsysFirefoxProxyBaseUrl: settings.samacsysFirefoxProxyBaseUrl,
@@ -486,6 +492,7 @@ settingsForm.addEventListener("submit", (event) => {
   saveSettings();
 });
 
+outputFormatEl.addEventListener("change", () => markDirty());
 downloadIndividuallyEl.addEventListener("change", () => markDirty());
 libraryDownloadRootEl.addEventListener("input", () => markDirty());
 samacsysFirefoxProxyBaseUrlEl.addEventListener("input", () => markDirty());
@@ -530,6 +537,7 @@ if (globalThis.__settingsPageTestApi) {
       statusEl,
       saveSettingsEl,
       discardSettingsEl,
+      outputFormatEl,
       downloadIndividuallyEl,
       libraryDownloadRootEl,
       resetLibraryDownloadRootEl,

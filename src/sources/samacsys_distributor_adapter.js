@@ -7,6 +7,7 @@
 
 import {
   loadSettings,
+  OUTPUT_FORMAT_ALTIUM,
   resolveSamacsysAuthorizationHeader
 } from "../core/settings.js";
 import {
@@ -20,6 +21,7 @@ import {
 import {
   buildSamacsysPreviewResponse,
   createSamacsysFetchImpl,
+  extractSamacsysAltiumAssets,
   extractSamacsysKiCadAssets,
   fetchSamacsysPageMetadata,
   fetchSamacsysZipArchive,
@@ -46,10 +48,35 @@ function addMissingAssetWarnings(warnings, options, assets) {
   ];
 
   for (const [isMissing, message] of missingSelectedAssets) {
-    if (isMissing) {
-      warnings.push(message);
+      if (isMissing) {
+        warnings.push(message);
+      }
+  }
+}
+
+// Altium files need no reference rewriting: each upstream binary is written
+// as-is into its type folder (library mode) or beside the others (loose mode).
+async function writeSamacsysAltiumAssets({ downloads, exportContext, options, assets }) {
+  const { symbolDir, footprintDir, modelDir } = exportContext.libraryPaths;
+  const groups = [
+    [options.symbol, assets.symbols, symbolDir],
+    [options.footprint, assets.footprints, footprintDir],
+    [options.model3d, assets.stepModels, modelDir]
+  ];
+  let downloadCount = 0;
+  for (const [isSelected, files, directory] of groups) {
+    if (!isSelected) continue;
+    for (const file of files) {
+      downloadCount += await writeBinaryArtifact({
+        downloads,
+        exportContext,
+        data: file.data,
+        individualFilename: file.filename,
+        libraryPath: `${directory}/${file.filename}`
+      });
     }
   }
+  return downloadCount;
 }
 
 function createSamacsysDistributorAdapter(deps) {
@@ -103,6 +130,17 @@ function createSamacsysDistributorAdapter(deps) {
           ? ""
           : upstreamAuthorizationHeader
       });
+      if (exportContext.settings.outputFormat === OUTPUT_FORMAT_ALTIUM) {
+        const altiumAssets = await extractSamacsysAltiumAssets(zipBuffer, readZipEntries);
+        addMissingAssetWarnings(warnings, resolvedOptions, { ...altiumAssets, wrlModels: [] });
+        downloadCount += await writeSamacsysAltiumAssets({
+          downloads,
+          exportContext,
+          options: resolvedOptions,
+          assets: altiumAssets
+        });
+        return { warnings, downloadCount };
+      }
       const assets = await extractSamacsysKiCadAssets(zipBuffer, readZipEntries);
       const libraryName = getLibraryName(exportContext.libraryPaths);
       const primaryFootprintName = assets.footprints[0]?.name || null;
