@@ -16,6 +16,8 @@ This file records short implementation notes that supplement, but do not replace
 - `src/sources/samacsys_common.js` holds the shared SamacSys preview, ZIP, relay-cookie, relay-auth, upstream-auth, direct-request ZIP-auth fallback, and asset-rewrite helpers
 - `src/kicad_converter.js`: stable public converter facade
 - `src/kicad/*.js`: EasyEDA parsing, KiCad text generation, shared conversion math, and OBJ-to-WRL conversion
+- `src/altium_converter.js`: EasyEDA-to-Altium facade reusing the EasyEDA parsers and millimetre normalization from `src/kicad/`
+- `src/altium/*.js`: Compound File Binary writer plus native `.SchLib` and `.PcbLib` record emitters
 - `src/vendor/zip_reader.js`: minimal runtime ZIP extraction for SamacSys archives
 
 ## Testability notes
@@ -56,7 +58,7 @@ This file records short implementation notes that supplement, but do not replace
 - Relay auth and upstream SamacSys auth are separate: relay auth is sent only on the Worker POST, while upstream auth is forwarded inside the relay payload.
 - Relay transport rejects HTTP redirects because its JSON carries upstream credentials; users configure the final relay endpoint.
 - SamacSys ZIP-export `401` responses are mapped to a sign-in-required error because upstream authentication can be stricter for downloads than for previews.
-- SamacSys ZIP extraction treats `KiCad/` and `3D/` directories as valid whether they appear at the archive root or under a part-specific parent folder.
+- SamacSys ZIP extraction treats `KiCad/`, `Altium/` and `3D/` directories as valid whether they appear at the archive root or under a part-specific parent folder. Altium output copies the upstream `.SchLib`/`.PcbLib` binaries unchanged.
 - SamacSys request targets are validated before auth/cookie resolution. The deployable relay example validates redirects and clears origin-bound headers on origin changes.
 - Direct browser fetch redirects remain a destination-enforcement gap recorded in `docs/deviations.md`. Multi-asset SamacSys archives also retain first-footprint/first-model association assumptions; arbitrary asset pairing needs independent source fixtures before those rules can change safely.
 - The repository-owned ZIP reader supports stored/deflate classic single-disk archives, verifies member integrity and limits aggregate expanded bytes to 256 MiB.

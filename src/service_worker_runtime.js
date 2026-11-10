@@ -18,6 +18,7 @@ import { readZipEntries } from "./vendor/zip_reader.js";
 import { createEasyedaAdapter } from "./sources/easyeda_adapter.js";
 import { createSamacsysDistributorAdapter } from "./sources/samacsys_distributor_adapter.js";
 import { convertEasyedaCadToKicad, convertObjToWrlString } from "./kicad_converter.js";
+import { convertEasyedaCadToAltium } from "./altium_converter.js";
 
 function createSourceAdapters(deps) {
   return {
@@ -43,6 +44,8 @@ function createRuntimeDeps(overrides = {}) {
     userAgent: overrides.userAgent || globalThis.navigator?.userAgent,
     convertEasyedaCadToKicad:
       overrides.convertEasyedaCadToKicad || convertEasyedaCadToKicad,
+    convertEasyedaCadToAltium:
+      overrides.convertEasyedaCadToAltium || convertEasyedaCadToAltium,
     convertObjToWrlString: overrides.convertObjToWrlString || convertObjToWrlString
   };
 

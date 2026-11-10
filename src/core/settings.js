@@ -6,6 +6,9 @@
  */
 
 const DEFAULT_LIBRARY_DOWNLOAD_ROOT = "easyECADDownloader";
+const OUTPUT_FORMAT_ALTIUM = "altium";
+const OUTPUT_FORMAT_KICAD = "kicad";
+const DEFAULT_OUTPUT_FORMAT = OUTPUT_FORMAT_ALTIUM;
 const DEFAULT_SAMACSYS_FIREFOX_PROXY_BASE_URL = "";
 const DEFAULT_SAMACSYS_FIREFOX_PROXY_AUTHORIZATION_HEADER = "";
 const DEFAULT_SAMACSYS_FIREFOX_USERNAME = "";
@@ -21,6 +24,7 @@ const DEFAULT_SECRET_SETTINGS = {
 };
 
 const DEFAULT_SETTINGS = {
+  outputFormat: DEFAULT_OUTPUT_FORMAT,
   downloadIndividually: false,
   libraryDownloadRoot: DEFAULT_LIBRARY_DOWNLOAD_ROOT,
   samacsysFirefoxProxyBaseUrl: DEFAULT_SAMACSYS_FIREFOX_PROXY_BASE_URL,
@@ -57,6 +61,11 @@ function parseLibraryDownloadRoot(value) {
 
 function normalizeLibraryDownloadRoot(value) {
   return parseLibraryDownloadRoot(value).value;
+}
+
+// Unknown or missing stored formats resolve to the Altium default.
+function normalizeOutputFormat(value) {
+  return value === OUTPUT_FORMAT_KICAD ? OUTPUT_FORMAT_KICAD : DEFAULT_OUTPUT_FORMAT;
 }
 
 // Relay endpoints may use HTTP(S); URL parsing canonicalizes the configured
@@ -201,6 +210,7 @@ async function loadSettings(chromeApi) {
     rememberSamacsysFirefoxProxyAuthorizationHeader ? settings : sessionSettings;
 
   return {
+    outputFormat: normalizeOutputFormat(settings.outputFormat),
     downloadIndividually: parseBooleanSetting(
       settings.downloadIndividually,
       DEFAULT_SETTINGS.downloadIndividually
@@ -238,8 +248,22 @@ function buildLibraryPaths(libraryDownloadRoot = DEFAULT_LIBRARY_DOWNLOAD_ROOT) 
   };
 }
 
+// Altium symbol and footprint libraries are complete per-part binary files, so
+// library mode groups them by type instead of merging them into one library.
+function buildAltiumLibraryPaths(libraryDownloadRoot = DEFAULT_LIBRARY_DOWNLOAD_ROOT) {
+  return {
+    symbolDir: `${libraryDownloadRoot}/SchLib`,
+    footprintDir: `${libraryDownloadRoot}/PcbLib`,
+    modelDir: `${libraryDownloadRoot}/3D`,
+    datasheetDir: `${libraryDownloadRoot}/datasheets`
+  };
+}
+
 export {
   DEFAULT_LIBRARY_DOWNLOAD_ROOT,
+  DEFAULT_OUTPUT_FORMAT,
+  OUTPUT_FORMAT_ALTIUM,
+  OUTPUT_FORMAT_KICAD,
   DEFAULT_SAMACSYS_FIREFOX_PROXY_BASE_URL,
   DEFAULT_SAMACSYS_FIREFOX_PROXY_AUTHORIZATION_HEADER,
   DEFAULT_SAMACSYS_FIREFOX_USERNAME,
@@ -254,8 +278,10 @@ export {
   parseSamacsysProxyAuthorizationHeader,
   resolveSamacsysAuthorizationHeader,
   normalizeLibraryDownloadRoot,
+  normalizeOutputFormat,
   normalizeSamacsysFirefoxProxyBaseUrl,
   loadSettings,
+  buildAltiumLibraryPaths,
   buildLibraryPaths
 };
 

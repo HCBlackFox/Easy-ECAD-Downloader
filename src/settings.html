@@ -16,13 +16,20 @@
       <form id="settingsForm" class="settings-form" inert>
         <section class="settings-section" aria-labelledby="downloadSettingsTitle">
           <h2 id="downloadSettingsTitle">Downloads</h2>
+          <div class="settings-field">
+            <label class="settings-label" for="outputFormat">Library format</label>
+            <select id="outputFormat" class="settings-input">
+              <option value="altium" selected>Altium Designer (.SchLib, .PcbLib, STEP)</option>
+              <option value="kicad">KiCad (.kicad_sym, .kicad_mod, STEP, WRL)</option>
+            </select>
+          </div>
           <label class="option">
             <input type="checkbox" id="downloadIndividually" />
             Save each file separately
           </label>
           <div class="settings-field">
             <label class="settings-label" for="libraryDownloadRoot">
-              KiCad library folder
+              Library folder
             </label>
             <div class="field-action-row">
               <button
@@ -42,8 +49,9 @@
             </div>
           </div>
           <p class="settings-hint">
-            Choose the folder inside Downloads where grouped KiCad library files
-            are saved.
+            Choose the folder inside Downloads where grouped library files are
+            saved. Altium files go into SchLib, PcbLib and 3D subfolders; KiCad
+            files are grouped into one KiCad library.
           </p>
         </section>
 

@@ -73,7 +73,7 @@ flowchart LR
     settingsPage["Settings page\nsrc/settings_page.js"]
     storage["Browser storage\nchrome.storage.local/session"]
     serviceWorker["Extension backend\nsrc/service_worker.js"]
-    converter["EasyEDA converter\nsrc/kicad_converter.js"]
+    converter["EasyEDA converters\nsrc/altium_converter.js, src/kicad_converter.js"]
     zipReader["SamacSys ZIP reader\nsrc/vendor/zip_reader.js"]
     downloads["Browser downloads\nchrome.downloads"]
     easyeda["EasyEDA APIs\nCAD, STEP, OBJ, datasheet URLs"]
@@ -137,7 +137,7 @@ Owns persistent settings UI:
 - load and save ordinary settings through `chrome.storage.local`
 - keep helper tokens and SamacSys credentials in `chrome.storage.session` unless the user explicitly opts to remember them on this device
 - keep form edits local to the page until the user chooses `Save`, with `Discard` restoring the last loaded settings
-- expose the download layout controls, including loose-file mode and library folder root
+- expose the download layout controls, including library format (Altium by default, or KiCad), loose-file mode and library folder root
 - expose SamacSys username/password auth inputs for Mouser/Farnell/element14/Newark downloads
 - let users temporarily show or hide typed password and token values without changing stored settings
 - expose Firefox-only helper-service auth and relay URL inside a hidden-by-default advanced Firefox settings menu
@@ -181,6 +181,8 @@ This keeps the message boundary stable while allowing future sources to be added
 
 Keeps the public conversion API stable and delegates implementation to focused converter modules under `src/kicad/`.
 
+`src/altium_converter.js` reuses the EasyEDA parsers and millimetre normalization from `src/kicad/`; `src/altium/` writes Compound File Binary containers and native `.SchLib`/`.PcbLib` records (section 5.5).
+
 Those modules own:
 
 - EasyEDA symbol parsing
@@ -198,7 +200,7 @@ Absolute PT subpaths remain separate; repeated coordinate pairs, adjacent signed
 
 Remaining symbol-export fidelity defects include omitted noncircular ellipses and curved/relative PT paths, plus circular approximation of unequal-radii arc records. Native SVG previews accept broader geometry, so preview appearance alone does not establish exported-symbol fidelity. These remain unresolved review findings.
 
-Mouser parts do not flow through this converter for symbol or footprint generation because the upstream ZIP already contains KiCad assets.
+Mouser parts do not flow through this converter for symbol or footprint generation because the upstream ZIP already contains KiCad and Altium assets.
 
 ### 4.8 `src/vendor/zip_reader.js`
 
@@ -209,7 +211,7 @@ Owns small runtime archive extraction support:
 - deflate-entry reads through runtime decompression primitives
 - classic single-disk ZIP header, CRC-32 and expanded-length validation, with a 256 MiB total expansion ceiling
 
-It exists so the service worker can extract the KiCad subtree from the SamacSys ZIP without adding a build step.
+It exists so the service worker can extract the KiCad or Altium subtree from the SamacSys ZIP without adding a build step.
 
 ### 4.9 `tests`
 
@@ -289,7 +291,7 @@ Farnell-family description parsing uses whitespace-delimited hyphens as field se
 ### 5.3 Export EasyEDA-backed parts
 
 - The service worker fetches the EasyEDA payload using the detected LCSC id.
-- The converter produces KiCad symbol and footprint text.
+- With KiCad output selected, the converter produces KiCad symbol and footprint text; Altium output follows section 5.5.
 - Symbol, footprint, 3D, and datasheet exports follow the existing current-provider settings:
   - loose-file downloads when `downloadIndividually` is `true`
   - KiCad-style library structure when `downloadIndividually` is `false`
@@ -320,7 +322,7 @@ Farnell-family description parsing uses whitespace-delimited hyphens as field se
   - a stable `partID`
   - a preview token
   - ZIP download form metadata
-- The service worker downloads the SamacSys ZIP and extracts only:
+- With KiCad output selected, the service worker downloads the SamacSys ZIP and extracts only:
   - `KiCad/*.kicad_sym`
   - `KiCad/*.kicad_mod`
   - `3D/*.stp` and `3D/*.step`
@@ -339,6 +341,14 @@ Farnell-family description parsing uses whitespace-delimited hyphens as field se
 - When 3D export is selected, the worker exports STEP models and any WRL files already present in the SamacSys ZIP without probing extra remote WRL endpoints.
 - Library rewriting retains first-footprint/first-model association assumptions for archives with multiple assets; arbitrary symbol/footprint/model pairing is not independently resolved.
 
+### 5.5 Altium output
+
+- `outputFormat` (`altium` by default, or `kicad`) selects the export format for both provider families; previews are format-independent.
+- SamacSys exports take `Altium/*.SchLib`, `Altium/*.PcbLib` and `3D/*.stp`/`*.step` from the same ZIP and write them unchanged; selected but absent assets produce the existing missing-asset warnings, and a ZIP with none of them fails.
+- EasyEDA exports convert the parsed symbol and normalized footprint into one-component `.SchLib` and `.PcbLib` files. The symbol carries its designator prefix, comment and part parameters plus a PCB footprint implementation naming the EasyEDA package, which is also the PcbLib footprint name. STEP models download separately; WRL conversion is skipped and models are not embedded in the PcbLib.
+- Loose mode writes `<lcscId>-<symbolName>.SchLib`, `<package>.PcbLib` and `<model>.step` (SamacSys keeps ZIP filenames). Library mode writes the same files under `<libraryRoot>/SchLib/`, `PcbLib/`, `3D/` and `datasheets/`, without merging libraries or using symbol-library storage.
+- Tests decode generated libraries with an independent test-only Compound File reader. KiCad's Altium importer served as a development cross-check; Altium Designer itself is not exercised by the test suite.
+
 ## 6. Storage and settings behavior
 
 - The popup stays focused on detection, previews, export selection, and opening the dedicated settings page.
@@ -346,6 +356,7 @@ Farnell-family description parsing uses whitespace-delimited hyphens as field se
 - The settings page uses explicit `Save` and `Discard` actions rather than writing every field edit immediately.
 - The settings page hides the advanced Firefox settings menu when opened in Chrome.
 - `chrome.storage.local` stores ordinary extension settings:
+  - `outputFormat`
   - `downloadIndividually`
   - `libraryDownloadRoot`
   - `samacsysFirefoxProxyBaseUrl`
@@ -397,6 +408,7 @@ Farnell-family description parsing uses whitespace-delimited hyphens as field se
 - EasyEDA footprint downloads rewrite the first KiCad `(model ...)` path to the delivered basename from a usable completed STEP or WRL receipt, preferring WRL, and remove stale model blocks when neither receipt is usable within the portable layout.
 - EasyEDA datasheet output uses a sanitized base name plus `-datasheet` and the detected extension. In library mode it is saved under `<libraryRoot>/datasheets/`.
 - The library root name defaults to `easyECADDownloader` and can be changed to another Downloads-relative folder for library mode.
+- The rules above describe KiCad output; Altium filenames and folders follow section 5.5.
 
 ## 10. Maintainability and testing boundaries
 

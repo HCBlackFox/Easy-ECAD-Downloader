@@ -2,6 +2,13 @@
 
 Notable changes are recorded here in reverse chronological order.
 
+## Unreleased
+
+### Added
+
+- Added Altium Designer output, now the default library format. Mouser, Farnell, element14 and Newark exports copy the native `.SchLib`/`.PcbLib` files from the SamacSys ZIP; JLCPCB/LCSC exports convert EasyEDA data in the browser to native `.SchLib`/`.PcbLib` libraries with the symbol linked to its footprint. STEP models download alongside; library mode groups files under `SchLib/`, `PcbLib/` and `3D/`.
+- Added a settings-page library format choice; KiCad output remains available unchanged.
+
 ## 1.1.0
 
 ### Added
